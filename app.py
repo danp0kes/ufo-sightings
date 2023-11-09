@@ -1,85 +1,157 @@
-import streamlit as st 
-import pandas as pd 
-import plotly_express as px
+# Import appropriate packages
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import numpy as np
+import calendar
 
 # Read file
-df = pd.read_csv('vehicles_us.csv')
+df = pd.read_csv('ufo-sightings-transformed.csv', parse_dates=['Date_time'])
+
+# Drop unnamed column
+df = df.iloc[:,1:]
+
+# Make columns lowercase for easier referencing
+df.columns = df.columns.str.lower()
+
+# Change name of confusing duration column name
+df = df.rename(columns= {'length_of_encounter_seconds':'duration_secs'})
+
+# Change month number to month name
+df['month'] = df['month'].apply(lambda x: calendar.month_name[x])
+
+# Create duration in minutes column
+df['duration_mins'] = df['duration_secs'] / 60
+
+# Create duration in hours
+df['duration_hours'] = df['duration_mins'] / 60
+
+# Create duration in days 
+df['duration_days'] = df['duration_hours'] / 24
+
+# Create age column as 2023 minus the year and month
+
+df['age'] = 2023 - (df['date_time'].dt.year + (df['date_time'].dt.month/12))
 
 # Create a text header above the dataframe
-st.header('Car Sales Advertisements') 
+st.header('UFO Sightings') 
 
+# Create header scatterplot
+st.write("""
+##### Introduction
+The data contains information about UFO encounters from 1906 to 2014. Details about the shape of the UFO, the duration of the encounter and as well as the co-ordinates of its location have all been recorded. Our analysis will look at these elements on a histogram, scatterplot and a map.
+""") 
+
+# Save list of countries as countries
+countries = df['country'].unique()
+
+# Create select box to filter by country
+name_country = st.selectbox('Select country:',countries)
+
+# Save min and max years for slider
+duration_min, duration_max = (df['duration_hours'].min(), df['duration_hours'].max())
+
+# Create header scatterplot
+st.write("""
+##### Filter encounters by the duration length
+""") 
+
+# Create slider using min and max years
+duration_range = st.slider('Choose duration lengths (hours):', value=(duration_min, duration_max) , min_value=duration_min, max_value=duration_max)
+
+
+#save filtered df as the 
+filtered_df = df[(df['country'] == name_country) & (df['duration_hours'] > duration_range[0])]# & df[df['duration_hours'] < duration_range[1]]]
+              
 # Display the dataframe with streamlit
-st.dataframe(df)
+st.table(filtered_df.head(5))
 
-# Create header scatteplot
-st.header('Average Odometer and Price of Car Vehicles By Manufacturer and Model') 
+# Create histogram header
+st.header('Duration Analysis')
 
-# Find brand and type by splitting 'model' string
-df[['brand', 'type']] = df['model'].str.split(' ', n=1, expand= True)
+st.write("""
+###### Does the duration of the encounter change depending on the shape of the observed ufo? The state it is observed in? How about the month or season?
+""")
 
-# Find the average odometer of car models plotted against average price (o_p)
-# Select model, brand, price and odometer
-o_p = df[['model','brand','price','odometer']]
+# Create dataframes for different duration lengths by dynamically setting variables
+d = {}
+d['minute'] = filtered_df[filtered_df['duration_mins'] <= 1]
+d['hour'] = filtered_df[filtered_df['duration_hours'] <= 1]
+d['day'] = filtered_df[filtered_df['duration_days'] <= 1]
+d['millenia'] = filtered_df
 
-# Group by model and brand to find the average mean price
-o_p_g = o_p.groupby(['model','brand']).mean().reset_index()
+# Create selection box for duration length
+duration_for_hist = st.selectbox('duration length by first:',  ['minute','hour','day','millenia'])
 
-# Round price and odometer values to nearest tenth value
-o_p_g['price'] = round(o_p_g['price'],-1)
-o_p_g['odometer'] = round(o_p_g['odometer'],-1)
+# Create list for histogram variables
+var_list_for_hist= ['region', 'ufo_shape', 'season', 'month']
 
-# Create histogram with plot.ly, set odometer and price to x and y respectively, set color to brand
-fig = px.scatter( o_p_g, x='odometer', y= 'price', hover_data= 'model', color= 'brand')
+# Create selection box for region, shape, season and month
+var_for_hist = st.selectbox('split for duration distribution:', var_list_for_hist)
 
-# Name axis titles and title
-fig.update_layout(xaxis_title='Odometer (miles)', yaxis_title=('Price (USD)'), 
-                  title= 'Average Odometer and Price of Car Vehicles By Brand',
-                 legend_title = 'Brand')
+# Provide changes to x-axis dependent on the above selectbox
+e = {}
+e['minute'] = 'duration_secs'
+e['hour'] = 'duration_mins'
+e['day'] = 'duration_hours'
+e['millenia'] = 'duration_days'
 
-# Display the figure with streamlit 
-st.write(fig)
+# Order months for legend
+months_ordered = ['January', 'February', 'March', 'April','May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-st.header("Histogram of 'condition' vs 'model _year'") 
-fig = px.histogram( df, x= 'model_year', color='condition') 
+# Create histogram
+fig = px.histogram(d[duration_for_hist], x=e[duration_for_hist], color=var_for_hist, category_orders={'month': months_ordered})
 
-st.write(fig)
+# Rename axis, title and legend
+fig.update_layout(title= 'Split of encounter duration by {}</b>'.format(var_for_hist))
 
-st.header('Compare price distribution between manufacturers')
-# get a list of car manufacturers
-manufac_list = sorted(df['brand'].unique())
-# get user's inputs from a dropdown menu
-manufacturer_1 = st.selectbox(
-                              label='Select manufacturer 1', # title of the select box
-                              options=manufac_list, # options listed in the select box
-                              index=manufac_list.index('chevrolet') # default pre-selected option
-                              )
-# repeat for the second dropdown menu
-manufacturer_2 = st.selectbox(
-                              label='Select manufacturer 2',
-                              options=manufac_list, 
-                              index=manufac_list.index('hyundai')
-                              )
-# filter the dataframe 
-mask_filter = (df['manufacturer'] == manufacturer_1) | (df['manufacturer'] == manufacturer_2)
-df_filtered = df[mask_filter]
+# Display the Chart
+st.plotly_chart(fig)
 
-# add a checkbox if a user wants to normalize the histogram
-normalize = st.checkbox('Normalize histogram', value=True)
-if normalize:
-    histnorm = 'percent'
-else:
-    histnorm = None
+# Create scatterplot header
+st.header('Age Analysis')
 
-# create a plotly histogram figure
-fig = px.histogram(df_filtered,
-                      x='price',
-                      nbins=30,
-                      color='manufacturer',
-                      histnorm=histnorm,
-                      barmode='overlay')
-# display the figure with streamlit
-fig = px.histogram(df_filtered, x='price', nbins=30, color='manufacturer', historm=histnorm, barmode='overlay')
+st.write("""
+###### How does the age of a reported case affect duration in terms of country, season and month
+""")
 
-# display the figure with streamlit 
-st.write(fig)
-                                         
+# Create dataframes for different duration lengths by dynamically setting variables
+f = {}
+f['minute'] = df[df['duration_mins'] <= 1]
+f['hour'] = df[df['duration_hours'] <= 1]
+f['day'] = df[df['duration_days'] <= 1]
+f['millenia'] = df
+
+# Create selection box for duration length
+duration_for_scatter = st.selectbox('duration length by first:',  ['minute','hour','day','millenia'], key=1)
+
+list_for_scatter= ['country', 'season', 'month'] 
+choice_for_scatter= st.selectbox('filter by:', list_for_scatter)
+
+fig2= px.scatter(f[duration_for_scatter], x=e[duration_for_scatter], y='age' , color=choice_for_scatter, hover_data='description',category_orders={'month': months_ordered})
+
+st.plotly_chart(fig2)
+
+# Create scatterplot header
+st.header('A Map of UFO Encounters')
+
+st.write("""
+###### Here are the encounters presented on a map. UFO shapes can be selected to show where different shapes have been found around the world. Sorting by duration and age will change the size of each bubble.
+""")
+
+# Find unique shapes
+shapes= df['ufo_shape'].unique()
+
+
+# Create 
+shapes_for_map = st.selectbox('Shape of the sighted UFO:', shapes)
+
+# Create variables to measure by for map
+list_for_map= ['duration_secs','age'] 
+choice_for_map= st.selectbox('increase bubble size by:', list_for_map)
+
+st.map(df[df['ufo_shape'] == shapes_for_map], latitude='latitude', longitude='longitude', size=list_for_map, color = [1.0, 0.5, 0, 0.2])
+
+st.write("""
+###### Interestingly, the only hexagon shaped UFO has said to have been spotted in Pittsburgh. Two crescents have been spotted in Wisconsin and New Hampshire.
+""")
