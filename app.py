@@ -32,15 +32,12 @@ st.write("""
 # Find min and max encounter years
 (min_year,max_year) = (df['encounter_date'].dt.year.min(),df['encounter_date'].dt.year.max())
 
-# Define supported types dictionary
-SUPPORTED_TYPES = {
-    int: 'Integer',
-    float: 'Float',
-    str: 'String',
-    np.int64: 'Integer'}  # Add numpy.int64 to the dictionary
-
 # Create slider for encounter years
 year_range = st.slider('Select a range of years:', min_year, max_year, (min_year, max_year))
+
+# Save as integers (for render)
+min_year = int(min_year)
+max_year = int(max_year)
 
 # Create selection box for duration length
 legend_variable = st.selectbox('Filter by:',[
