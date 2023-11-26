@@ -32,7 +32,7 @@ st.write("""
 # Find min and max encounter years
 (min_year,max_year) = (df['encounter_date'].dt.year.min(),df['encounter_date'].dt.year.max())
 
-# Save as integers (for render)
+# Change min and max years to integers
 min_year = int(min_year)
 max_year = int(max_year)
 
@@ -43,10 +43,6 @@ year_range = st.slider('Select a range of years:', min_year, max_year, (min_year
 legend_variable = st.selectbox('Filter by:',[
                                  'Season', 'Continent','Time of Day'], 
                                key=1)
-
-# Create new dataframe with filtered years
-filtered_df = df[(df['encounter_date'].dt.year >= year_range[0]) & (
-    df['encounter_date'].dt.year <= year_range[1])]
 
 # Save legend_variable to reference appropriate legend columns in histogram
 d={}
@@ -61,6 +57,10 @@ e['Season'] = ['Spring', 'Summer', 'Autumn', 'Winter']
 e['Continent'] = ['North America', 'South America', 'Europe', 'Asia', 'Africa', 'Oceania']
 e['Time of Day'] = ['Morning', 'Afternoon', 'Evening', 'Night']
 
+# Create new dataframe with filtered years
+filtered_df = df[(df['encounter_date'].dt.year >= year_range[0]) & (
+    df['encounter_date'].dt.year <= year_range[1])]
+
 # Create histogram of ufo sightings duration per continent
 fig = px.histogram(filtered_df, 
                    x='encounter_year', 
@@ -72,14 +72,14 @@ fig = px.histogram(filtered_df,
 # Update layout
 fig.update_layout(
     title={
-        'text': f"UFO Sightings Count and Duration per {legend_variable}",
+        'text': f"UFO Sightings Frequency and Duration per {legend_variable}",
         'y':0.95,
         'x':0.5,
         'xanchor': 'center',
         'yanchor': 'top'},
     xaxis_title="Duration (minutes)",
     yaxis_title="Number of Sightings",
-    legend_title="Continent",
+    legend_title=legend_variable,
     font=dict(
         family="Courier New, monospace",
         size=12,
@@ -110,33 +110,44 @@ year_range2 = st.slider('Select a range of years:', min_year, max_year, (min_yea
 # Create selection box for report date lag
 legend_variable2 = st.selectbox('Filter by:',['Season', 'Continent','Time of Day'], key=3)
 
-# Create new dataframe with filtered years
-filtered_df2 = df[(df['encounter_date'].dt.year >= year_range[0]) & (
-    df['encounter_date'].dt.year <= year_range[1])]
+# Create checkbox to select includes encounters with more than an hour duration
+checkbox = st.checkbox('Include encounters with more than an hour duration')
 
-# Filter dataframe to only include encounters with less than 1 hour duration (filter out outliers)
-filtered_df2 = filtered_df2[filtered_df2['duration_hours'] <= 1]
+# If checkbox is not checked, filter by encounters with less than 1 hour duration
+if checkbox == False:
+    # Filter dataframe to only include encounters with less than 1 hour duration (filter out outliers)
+    filtered_df2 = df[(df['encounter_date'].dt.year >= year_range2[0]) & (
+        df['encounter_date'].dt.year <= year_range2[1]) & (df['duration_hours'] <= 1)]
+
+# If checkbox is checked, only filter by year range
+else:
+    filtered_df2 = df[(df['encounter_date'].dt.year >= year_range2[0]) & (
+        df['encounter_date'].dt.year <= year_range2[1])]
+
+# Create color sequence for scatterplot
+color_sequence = px.colors.qualitative.Plotly
 
 # Create scatter plot with specific colors for each month
 fig2 = px.scatter(filtered_df2, 
                  x='reported_diff', 
                  y='duration_mins', 
-                 color=d[legend_variable], 
-                 category_orders={d[legend_variable]:e[legend_variable]},
-                 opacity=0.5
+                 color=d[legend_variable2], 
+                 category_orders={d[legend_variable2]:e[legend_variable2]},
+                 opacity=0.5,
+                 color_discrete_sequence=color_sequence,
                  )
 
 # Update titles
 fig2.update_layout(
     title={
-        'text': "Report Date Lag and Encounter Duration",
+        'text': f"Report Date Lag and Encounter Duration per {legend_variable2}",
         'y':0.95,
         'x':0.5,
         'xanchor': 'center',
         'yanchor': 'top'},
     xaxis_title="Reported Difference (years)",
     yaxis_title="Duration (mins)",
-    legend_title='Season',
+    legend_title= legend_variable2,
     font=dict(
         family="Courier New, monospace",
         size=14,
@@ -147,14 +158,14 @@ fig2.update_layout(
 st.plotly_chart(fig2)
 
 st.write("""
-If we expected a reported duration to increase over time the scatter plot would reflect this. 
-This doesn't seem to be 
+If we expected a reported duration to increase over time the 
+scatter plot would reflect this. This doesn't seem to be 
 the case as every encounter with a report lag of sixty years plus 
 do not exceed those found in previous years.
 """)
 #----------------------------------------------------------------------------------------------------------------------------
 
-# Create mape header
+# Create map header
 st.header('A Map of UFO Encounters')
 
 st.write("""
